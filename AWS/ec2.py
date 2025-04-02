@@ -32,6 +32,13 @@ def hello_ec2(ec2_client):
             logger.error("You do not have permission to list security groups.")
         raise
 
+def describe_instances(ec2):
+    response = ec2.describe_instances()
+    return response
 
 if __name__ == "__main__":
-    hello_ec2(boto3.client("ec2", region_name="us-east-1"))
+    hello_ec2(boto3.client("ec2"))
+
+    ec2 = boto3.client('ec2')
+    response = describe_instances()
+    print(response)
