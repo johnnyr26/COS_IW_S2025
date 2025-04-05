@@ -10,9 +10,22 @@ load_dotenv(override=True)
 
 class SSM_Wrapper():
     def __init__(self, ssm: SSMClient):
+        """
+        Initializes the SSM client.
+
+        :param ssm: A Boto3 SSM client. This client allows user to execute
+                        commands on EC2 instances.
+        """
         self.ssm = ssm
 
     def execute_commands(self, instance_id: str, commands: list[str]):
+        """
+        Executes a series of commands on the ec2 instance. Prints out
+        the standard output and standard error. 
+
+        :param instance_id: The instance id of the EC2 instance to start.
+        :param commands: The list of commands to execute sequentially on the EC2 instance.
+        """
         response = self.ssm.send_command(
             InstanceIds=[instance_id],
             DocumentName="AWS-RunShellScript",
