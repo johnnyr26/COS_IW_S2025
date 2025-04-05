@@ -5,7 +5,7 @@ from azure.mgmt.compute import ComputeManagementClient
 
 load_dotenv()
 
-class Azure():
+class Azure_VM_Wrapper():
     def __init__(
         self, 
         subscription_id: str, 
@@ -33,5 +33,5 @@ if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
     resource_group_name = os.getenv("azure_resource_group_name")
     if subscription_id and resource_group_name:
-        azure = Azure(subscription_id, resource_group_name)
+        azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
         azure.describe_vms()
