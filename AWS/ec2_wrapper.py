@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 load_dotenv(override=True)
 
-class EC2Wrapper():
+class EC2_Wrapper():
     def __init__(self, ec2: EC2Client):
         """
         Initializes the EC2 instance.
@@ -69,7 +69,7 @@ class EC2Wrapper():
         return self.ec2.describe_instances()
 
 if __name__ == "__main__":
-    ec2 = EC2Wrapper(
+    ec2 = EC2_Wrapper(
         ec2=boto3.client('ec2'),
     )
     
