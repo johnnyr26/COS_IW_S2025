@@ -11,14 +11,26 @@ class Azure_VM_Wrapper():
         subscription_id: str, 
         resource_group_name: str
     ):
+        """
+        Initializes the Azure VM Wrapper with the necessary credentials and subscriptions.
+        Authenticates to the Azure account and creates a ComputeManageClient that provides
+        low-level access to the virtual machines.
+
+        :param subscription_id: the subscription id for the virtual machines.
+        :param resource_group_name: the resource group name attached to the subscription.
+        """
         self.subscription_id = subscription_id
         self.resource_group_name = resource_group_name
         credential = DefaultAzureCredential()
-        compute_client = ComputeManagementClient(credential, subscription_id)
-        self.vms = compute_client.virtual_machines.list(resource_group_name)
+        self.compute_client = ComputeManagementClient(credential, subscription_id)
         
     def describe_vms(self):
-        for vm in self.vms:
+        """
+        Lists and describes all of the virtual machines belonging to the subscription
+        and resource group.
+        """
+        vms = self.compute_client.virtual_machines.list(self.resource_group_name)
+        for vm in vms:
             print(f"VM Name: {vm.name}")
             print(f"Resource Group: {resource_group_name}")
             print(f"Location: {vm.location}")
@@ -27,11 +39,34 @@ class Azure_VM_Wrapper():
             else:
                 print("Operating System: Not available")
 
+    def start_vm(self, vm_name: str):
+        """
+        Starts a virtual machine.
+
+        :param vm_name: the name of the virtual machine to start.
+        """
+        start_vm_poller = self.compute_client.virtual_machines.begin_start(self.resource_group_name, vm_name)
+        start_vm_poller.result()
+        print(f"VM {vm_name} started")
+
+    def stop_vm(self, vm_name: str):
+        """
+        Terminates a virtual machine.
+
+        :param vm_name: the name of the virtual machine to terminate.
+        """
+        stop_vm_poller = self.compute_client.virtual_machines.begin_power_off(self.resource_group_name, vm_name)
+        stop_vm_poller.result()
+        print(f"VM {vm_name} terminated")
+
 
 
 if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
     resource_group_name = os.getenv("azure_resource_group_name")
-    if subscription_id and resource_group_name:
+    vm_name = os.getenv("azure_vm_name")
+    if subscription_id and resource_group_name and vm_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
         azure.describe_vms()
+        # azure.start_vm(vm_name)
+        # azure.stop_vm(vm_name)
