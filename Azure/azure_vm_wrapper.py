@@ -2,8 +2,9 @@ import os
 from dotenv import load_dotenv
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.compute.models import RunCommandInput, RunCommandResult
 
-load_dotenv()
+load_dotenv(override=True)
 
 class Azure_VM_Wrapper():
     def __init__(
@@ -59,6 +60,31 @@ class Azure_VM_Wrapper():
         stop_vm_poller.result()
         print(f"VM {vm_name} terminated")
 
+    def execute_commands(self, vm_name: str, commands: list[str]):
+        """
+        Executes a command on the virtual machine.
+
+        :param vm_name: the name of the virtual machine to execute the command.
+        :param commands: the list of commands to exceute on the virtual machine.
+        """
+
+        command_input = RunCommandInput(
+            command_id='RunShellScript',
+            script=commands
+        )
+
+        exec_command_poller = self.compute_client.virtual_machines.begin_run_command( # type: ignore
+            resource_group_name=self.resource_group_name,
+            vm_name=vm_name,
+            parameters=command_input # type: ignore
+        )
+
+        result = exec_command_poller.result() # type: ignore
+
+        if isinstance(result, RunCommandResult) and isinstance(result.value, list):
+            for message in result.value:
+                print(message.code)
+                print(message.message)
 
 
 if __name__ == "__main__":
@@ -67,6 +93,13 @@ if __name__ == "__main__":
     vm_name = os.getenv("azure_vm_name")
     if subscription_id and resource_group_name and vm_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        azure.describe_vms()
+        # azure.describe_vms()
+
+        # Commands to run
+        commands = [
+            "echo Hello from VM",
+            "echo This is an error >&2"
+        ]
         # azure.start_vm(vm_name)
+        azure.execute_commands(vm_name, commands)
         # azure.stop_vm(vm_name)
