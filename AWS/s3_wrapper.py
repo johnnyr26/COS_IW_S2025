@@ -11,7 +11,7 @@ class S3_Wrapper():
         """
         self.s3 = s3
     
-    def upload_file(self, filename: str, bucket: str, key: str):
+    def upload_file(self, filepath: str, bucket: str, key: str):
         """
         Uploads the file to the s3 storage. 
 
@@ -19,7 +19,7 @@ class S3_Wrapper():
         :param bucket: The name of the bucket to store the file.
         :param key: The unique name to identify the file in the bucket.
         """
-        self.s3.upload_file(filename, bucket, key)
+        self.s3.upload_file(filepath, bucket, key)
 
 if __name__ == "__main__":
     s3 = S3_Wrapper(boto3.client("s3"))
