@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
 from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
 
 load_dotenv(override=True)
 
@@ -19,6 +20,7 @@ class Blob_Wrapper():
             account_url = f"https://{storage_account_name}.blob.core.windows.net"
             credential = DefaultAzureCredential()
             self.blob_service_client = BlobServiceClient(account_url, credential=credential)
+            self.storage_account_name = storage_account_name
         except Exception as ex:
             print("Failed to initialize Blob client", ex)
 
@@ -32,6 +34,20 @@ class Blob_Wrapper():
                 print(f"Blob upload {blob} succeeded.")
         except Exception as ex:
             print("Failed to upload blob", ex)
+
+    def get_blob_url(self, container_name: str, blob_name: str, account_key: str) -> str:
+        sas_token = generate_blob_sas(
+            account_name=self.storage_account_name,
+            container_name=container_name,
+            blob_name=blob_name,
+            account_key=account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=(datetime.now(timezone.utc) + timedelta(hours=1))
+        )
+
+        sas_url = f"https://{self.storage_account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
+        return sas_url
+
 
 if __name__ == "__main__":
     storage_account_name = os.getenv("azure_storage_name")
