@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import RunCommandInput, RunCommandResult
+from storage_wrapper import Storage_Wrapper
 
 load_dotenv(override=True)
 
@@ -91,15 +92,16 @@ if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
     resource_group_name = os.getenv("azure_resource_group_name")
     vm_name = os.getenv("azure_vm_name")
-    if subscription_id and resource_group_name and vm_name:
+    container_name = os.getenv("azure_container_name")
+    if subscription_id and resource_group_name and vm_name and container_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        # azure.describe_vms()
-
-        # Commands to run
+        storage_wrapper = Storage_Wrapper("cosiwaccount", subscription_id, resource_group_name)
+        blob_name = "hello_world.sh"
+        blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
         commands = [
-            "echo Hello from VM",
-            "echo This is an error >&2"
+            f"curl -o /home/azureuser/{blob_name} '{blob_url}'",
+            f"chmod +x /home/azureuser/{blob_name}",
+            f"/home/azureuser/{blob_name}"
         ]
-        # azure.start_vm(vm_name)
         azure.execute_commands(vm_name, commands)
         # azure.stop_vm(vm_name)
