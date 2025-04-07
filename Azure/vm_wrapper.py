@@ -93,9 +93,10 @@ if __name__ == "__main__":
     resource_group_name = os.getenv("azure_resource_group_name")
     vm_name = os.getenv("azure_vm_name")
     container_name = os.getenv("azure_container_name")
-    if subscription_id and resource_group_name and vm_name and container_name:
+    storage_name = os.getenv("azure_storage_name")
+    if subscription_id and resource_group_name and vm_name and container_name and storage_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        storage_wrapper = Storage_Wrapper("cosiwaccount", subscription_id, resource_group_name)
+        storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
         blob_name = "hello_world.sh"
         blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
         commands = [
