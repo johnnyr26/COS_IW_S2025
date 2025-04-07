@@ -30,7 +30,7 @@ class Cloudwatch_Wrapper():
         :param start_time: string format of the start date.
         :param end_time: string format of the end date.
 
-        :return: A dictionary with the time and CPU usage for each hour in the given time period.
+        :return: A dictionary with the time period and CPU usage for each hour in the given time period.
         """
         response = self.cloudwatch.get_metric_statistics(
             Namespace='AWS/EC2',
