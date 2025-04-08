@@ -1,7 +1,7 @@
 import boto3
 from mypy_boto3_ce import CostExplorerClient
 
-class Costexplorer_Wrapper():
+class Cost_Explorer_Wrapper():
     def __init__(self, ce: CostExplorerClient):
         """
         Initializes the CostExplorer wrapper.
@@ -54,7 +54,7 @@ class Costexplorer_Wrapper():
                 total_hours += float(usage_quantity_data)
                 usage_quantity.append({
                     "time_period": {k: str(v) for k, v in data.get("TimePeriod", {}).items()},
-                    "cost": float(usage_quantity_data)
+                    "usage": float(usage_quantity_data)
                 })
 
         return {
@@ -66,7 +66,7 @@ class Costexplorer_Wrapper():
                 
 
 if __name__ == "__main__":
-    ce = Costexplorer_Wrapper(boto3.client('ce'))
+    ce = Cost_Explorer_Wrapper(boto3.client('ce'))
     print(ce.get_cost_and_usage(
         start_date="2025-04-01",
         end_date="2025-04-07"
