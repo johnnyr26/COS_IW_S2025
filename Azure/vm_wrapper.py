@@ -1,4 +1,5 @@
 import os
+import requests
 from dotenv import load_dotenv
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
@@ -87,6 +88,32 @@ class Azure_VM_Wrapper():
                 print(message.code)
                 print(message.message)
 
+    def get_azure_spot_prices(self, vm_type: str, region: str | None = None):
+        """
+        Fetches the current spot price for a particular Azure instance.
+
+        :param vm_type: the VM instance type to fetch the price for.
+        """
+        api_url = "https://prices.azure.com/api/retail/prices"
+        query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
+        if region:
+            query += f" and armRegionName eq '{region}'"
+        response = requests.get(api_url, params={'$filter': query})
+
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get('Items', {})
+
+            if items:
+                for item in items:
+                    print(f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}")
+            else:
+                print("No spot pricing data found for the specified instance.")
+        else:
+            print("Failed to fetch pricing data:", response.status_code)
+            print(response.text)
+
+            
 
 if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
@@ -96,13 +123,14 @@ if __name__ == "__main__":
     storage_name = os.getenv("azure_storage_name")
     if subscription_id and resource_group_name and vm_name and container_name and storage_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
-        blob_name = "hello_world.sh"
-        blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
-        commands = [
-            f"curl -o /home/azureuser/{blob_name} '{blob_url}'",
-            f"chmod +x /home/azureuser/{blob_name}",
-            f"/home/azureuser/{blob_name}"
-        ]
-        azure.execute_commands(vm_name, commands)
+        azure.get_azure_spot_prices("F16s Spot", "eastus2")
+        # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
+        # blob_name = "hello_world.sh"
+        # blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
+        # commands = [
+        #     f"curl -o /home/azureuser/{blob_name} '{blob_url}'",
+        #     f"chmod +x /home/azureuser/{blob_name}",
+        #     f"/home/azureuser/{blob_name}"
+        # ]
+        # azure.execute_commands(vm_name, commands)
         # azure.stop_vm(vm_name)
