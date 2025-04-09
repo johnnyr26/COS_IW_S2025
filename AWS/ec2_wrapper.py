@@ -2,7 +2,10 @@ import os
 from dotenv import load_dotenv
 import logging
 import boto3 
+from datetime import datetime, timezone
+from typing import Sequence
 from mypy_boto3_ec2.client import EC2Client
+from mypy_boto3_ec2.literals import InstanceTypeType
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,47 @@ class EC2_Wrapper():
         :param instance_id: The instance id of the EC2 instance to stop.
         """
         return self.ec2.describe_instances()
+    
+    def describe_spot_price_history(
+        self,
+        instance_types: Sequence[InstanceTypeType],
+        start_time: datetime,
+        end_time: datetime
+    ):
+        """
+        Describes the spot price history for the particular EC2 instance
+
+        :param instance_types: The list of instance types to fetch the spot prices for.
+        :param start_time: the starting time to fetch the spot prices.
+        :param end_time: the ending time to fetch the spot prices.
+        :returns: dictionary of the instance, the spot price, and the timestamp.
+        """
+        response = self.ec2.describe_spot_price_history(
+            EndTime=end_time,
+            InstanceTypes=instance_types,
+            ProductDescriptions=[
+                'Linux/UNIX (Amazon VPC)',
+            ],
+            StartTime=start_time,
+        )
+
+        spot_prices: list[dict[str, str | datetime | None]] = []
+        for data in response['SpotPriceHistory']:
+            price = data.get('SpotPrice')
+            instance_type = data.get('InstanceType')
+            timestamp = data.get('Timestamp')
+            if timestamp:
+                timestamp = timestamp.now(timezone.utc)
+
+            spot_prices.append({
+                "instance": instance_type,
+                "price": price,
+                "timestamp": timestamp
+            })
+
+        return spot_prices
+    
+
 
 if __name__ == "__main__":
     ec2 = EC2_Wrapper(
@@ -75,4 +119,11 @@ if __name__ == "__main__":
     
     instance_id = os.getenv('aws_instance_id')
     if instance_id:
-        ec2.stop_instance(instance_id)
+        end_time = datetime.now()
+        start_time = end_time
+        response = ec2.describe_spot_price_history(
+            start_time=start_time,
+            end_time=end_time,
+            instance_types=["m4.large"]
+        )
+        print(response)
