@@ -1,10 +1,11 @@
 import os
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import RunCommandInput, RunCommandResult
-from storage_wrapper import Storage_Wrapper
+# from storage_wrapper import Storage_Wrapper
 
 load_dotenv(override=True)
 
@@ -88,6 +89,49 @@ class Azure_VM_Wrapper():
                 print(message.code)
                 print(message.message)
 
+    def get_azure_spot_price_history(
+            self,
+            vm_name: str,
+            region: str
+    ):
+        """
+        Fetches the spot price history for a particular Azure virtual machine.
+        Uses the cloudprice API to fetch the prices from the past 30 days.
+
+        :param vm_name: the VM name to fetch the price for.
+        :param region: the region to fetch the VM spot price history for.
+        """
+        url = f"https://data.cloudprice.net/api/v1/price_history_vm"
+        params = {
+            "vmname": vm_name,
+            "regions": region,
+            "currency": "USD",
+            "timerange": "last30Days",
+            "tier": "spot",
+            "payment": "payasyougo"
+        }
+
+        headers ={
+            # Request headers
+            'Cache-Control': 'no-cache',
+            'subscription-key': os.getenv("cloudnet_subscription_primary_key", ""),
+            'allowed-origins': '*',
+        }
+
+        spot_prices: list[dict[str, str | datetime]] = []
+
+        response = requests.get(url=url, params=params, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            history_price_values = data.get('listHistoryPriceValues', {})
+            for data in history_price_values:
+                spot_prices.append({
+                    "instance": data.get('name'),
+                    "price": data.get('linuxPrice'),
+                    "timestamp": datetime.strptime(data.get('modifiedDate'), '%Y-%m-%d %H:%M:%S')
+                })
+            return spot_prices
+
     def get_azure_spot_prices(self, vm_type: str, region: str | None = None):
         """
         Fetches the current spot price for a particular Azure instance.
@@ -123,7 +167,12 @@ if __name__ == "__main__":
     storage_name = os.getenv("azure_storage_name")
     if subscription_id and resource_group_name and vm_name and container_name and storage_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        azure.get_azure_spot_prices("F16s Spot", "eastus2")
+        response = azure.get_azure_spot_price_history(
+            vm_name="Standard_M416s_6_v3",
+            region="eastus"
+        )
+        print(response)
+        # azure.get_azure_spot_prices("F16s Spot", "eastus2")
         # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
         # blob_name = "hello_world.sh"
         # blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
