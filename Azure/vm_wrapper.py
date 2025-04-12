@@ -1,15 +1,18 @@
 import os
 import requests
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import RunCommandInput, RunCommandResult
+
 # from storage_wrapper import Storage_Wrapper
+from shared.virtual_machine import Virtual_Machine
+from shared.types.spot_price import Spot_Price
 
 load_dotenv(override=True)
 
-class Azure_VM_Wrapper():
+class Azure_VM_Wrapper(Virtual_Machine):
     def __init__(
         self, 
         subscription_id: str, 
@@ -89,22 +92,27 @@ class Azure_VM_Wrapper():
                 print(message.code)
                 print(message.message)
 
-    def get_azure_spot_price_history(
-            self,
-            vm_name: str,
-            region: str
-    ):
+    def get_spot_price_history(
+        self,
+        vm_type: str,
+        start_time: datetime,
+        end_time: datetime,
+        region: str | None = None,
+    ) -> list[Spot_Price] | None:
         """
         Fetches the spot price history for a particular Azure virtual machine.
         Uses the cloudprice API to fetch the prices from the past 30 days.
 
-        :param vm_name: the VM name to fetch the price for.
-        :param region: the region to fetch the VM spot price history for.
+        :param vm_type: the VM name.
+        :param start_time: the starting time for the spot price history.
+        :param end_time: the ending time for the spot price history.
+        :param region: the region of the VM.
+        :returns: a list of spot prices for the date range (max 30-days).
         """
         url = f"https://data.cloudprice.net/api/v1/price_history_vm"
         params = {
-            "vmname": vm_name,
-            "regions": region,
+            "vmname": vm_type,
+            "regions": region if region else "",
             "currency": "USD",
             "timerange": "last30Days",
             "tier": "spot",
@@ -118,44 +126,83 @@ class Azure_VM_Wrapper():
             'allowed-origins': '*',
         }
 
-        spot_prices: list[dict[str, str | datetime]] = []
+        spot_prices: list[Spot_Price] = []
 
         response = requests.get(url=url, params=params, headers=headers)
         if response.status_code == 200:
             data = response.json()
             history_price_values = data.get('listHistoryPriceValues', {})
             for data in history_price_values:
-                spot_prices.append({
-                    "instance": data.get('name'),
-                    "price": data.get('linuxPrice'),
-                    "timestamp": datetime.strptime(data.get('modifiedDate'), '%Y-%m-%d %H:%M:%S')
-                })
+                timestamp = datetime.strptime(data.get('modifiedDate'), '%Y-%m-%d %H:%M:%S')
+                if timestamp < start_time or timestamp > end_time:
+                    # filter out timestamps that do not fit within the bounds.
+                    continue
+
+                vm = data.get('name')
+                price = data.get('linuxPrice')
+
+                if price:
+                    price = float(price)
+
+                if vm and price and timestamp:
+                    spot_price = Spot_Price(
+                        vm_type=vm,
+                        price=price,
+                        timestamp=timestamp
+                    )
+
+                    spot_prices.append(spot_price)
             return spot_prices
 
-    def get_azure_spot_prices(self, vm_type: str, region: str | None = None):
+    def get_spot_price(        
+        self,
+        vm_type: str,
+        region: str | None = None
+    ) -> Spot_Price | None:
         """
         Fetches the current spot price for a particular Azure instance.
+        Since the spot prices update periodically, fetching the most recent
+        posted spot price will be used as the 'current' spot price.
 
-        :param vm_type: the VM instance type to fetch the price for.
+        :param vm_type: the VM type to fetch the price for.
+        :param region: the region of the VM.
+        :returns: the most recently posted Spot Price.
         """
-        api_url = "https://prices.azure.com/api/retail/prices"
-        query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
-        if region:
-            query += f" and armRegionName eq '{region}'"
-        response = requests.get(api_url, params={'$filter': query})
 
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get('Items', {})
+        end_time = datetime.now()
+        start_time = end_time - timedelta(days=30)
 
-            if items:
-                for item in items:
-                    print(f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}")
-            else:
-                print("No spot pricing data found for the specified instance.")
-        else:
-            print("Failed to fetch pricing data:", response.status_code)
-            print(response.text)
+        spot_prices = self.get_spot_price_history(
+            vm_type=vm_type,
+            start_time=start_time,
+            end_time=end_time,
+            region=region
+        )
+
+    
+
+        if spot_prices:
+            # return the  most recent spot price
+            return spot_prices[0]
+        
+        # api_url = "https://prices.azure.com/api/retail/prices"
+        # query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
+        # if region:
+        #     query += f" and armRegionName eq '{region}'"
+        # response = requests.get(api_url, params={'$filter': query})
+
+        # if response.status_code == 200:
+        #     data = response.json()
+        #     items = data.get('Items', {})
+
+        #     if items:
+        #         for item in items:
+        #             print(f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}")
+        #     else:
+        #         print("No spot pricing data found for the specified instance.")
+        # else:
+        #     print("Failed to fetch pricing data:", response.status_code)
+        #     print(response.text)
 
             
 
@@ -167,10 +214,15 @@ if __name__ == "__main__":
     storage_name = os.getenv("azure_storage_name")
     if subscription_id and resource_group_name and vm_name and container_name and storage_name:
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        response = azure.get_azure_spot_price_history(
-            vm_name="Standard_M416s_6_v3",
-            region="eastus"
+        end_time = datetime.now()
+        start_time = end_time - timedelta(days=30)
+        response = azure.get_spot_price_history(
+            vm_type="Standard_M416s_6_v3",
+            region="eastus",
+            start_time=start_time,
+            end_time=end_time
         )
+        
         print(response)
         # azure.get_azure_spot_prices("F16s Spot", "eastus2")
         # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
