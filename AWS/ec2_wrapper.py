@@ -2,16 +2,18 @@ import os
 from dotenv import load_dotenv
 import logging
 import boto3 
-from datetime import datetime, timezone
-from typing import Sequence
+from datetime import datetime, timezone, timedelta
 from mypy_boto3_ec2.client import EC2Client
 from mypy_boto3_ec2.literals import InstanceTypeType
 from botocore.exceptions import ClientError
 
+from shared.virtual_machine import Virtual_Machine
+from shared.types.spot_price import Spot_Price
+
 logger = logging.getLogger(__name__)
 load_dotenv(override=True)
 
-class EC2_Wrapper():
+class EC2_Wrapper(Virtual_Machine):
     def __init__(self, ec2: EC2Client):
         """
         Initializes the EC2 instance.
@@ -71,45 +73,93 @@ class EC2_Wrapper():
         """
         return self.ec2.describe_instances()
     
-    def describe_spot_price_history(
+    def get_spot_price(
         self,
-        instance_types: Sequence[InstanceTypeType],
+        vm_type: str | InstanceTypeType,
+        region: str | None = None
+    ) -> Spot_Price | None:
+        """
+        Describes the current spot price for the particular EC2 instance
+
+        :param vm_type: The EC2 instance type to fetch the spot price.
+        :param region: the availability zone of the EC2 instance.
+        :returns: current spot price of the EC2 instance for that particular region
+        """
+
+        start_time = end_time = datetime.now()
+
+        response = self.ec2.describe_spot_price_history(
+            EndTime=end_time,
+            InstanceTypes=[vm_type], # type: ignore
+            ProductDescriptions=[
+                'Linux/UNIX (Amazon VPC)',
+            ],
+            AvailabilityZone=region if region else '',
+            StartTime=start_time,
+        )
+
+        spot_price_history = response.get('SpotPriceHistory', {})
+
+        # just selects the first one since it offers different
+        # availability zones within the same region.
+        instance_type = spot_price_history[0].get('InstanceType')
+        price = spot_price_history[0].get('SpotPrice')
+        timestamp = spot_price_history[0].get('Timestamp')
+
+        if timestamp:
+                timestamp = timestamp.now(timezone.utc)
+
+        if price:
+            price = float(price)
+
+        if instance_type and price and timestamp:
+            spot_price = Spot_Price(vm_type=instance_type, price=price, timestamp=timestamp)
+            return spot_price
+        
+    
+    def get_spot_price_history(
+        self,
+        vm_type: str | InstanceTypeType,
         start_time: datetime,
-        end_time: datetime
-    ):
+        end_time: datetime,
+        region: str | None = None,
+    ) -> list[Spot_Price] | None:
         """
         Describes the spot price history for the particular EC2 instance
 
         :param instance_types: The list of instance types to fetch the spot prices for.
         :param start_time: the starting time to fetch the spot prices.
+        :param region: the availability zone of the EC2 instance.
         :param end_time: the ending time to fetch the spot prices.
-        :returns: dictionary of the instance, the spot price, and the timestamp.
+        :returns: list of Spot price instances.
         """
         response = self.ec2.describe_spot_price_history(
             EndTime=end_time,
-            InstanceTypes=instance_types,
+            InstanceTypes=[vm_type], # type: ignore
             ProductDescriptions=[
                 'Linux/UNIX (Amazon VPC)',
             ],
+            AvailabilityZone=region if region else '',
             StartTime=start_time,
         )
 
-        spot_prices: list[dict[str, str | datetime | None]] = []
+        spot_prices: list[Spot_Price] = []
         for data in response['SpotPriceHistory']:
             price = data.get('SpotPrice')
             instance_type = data.get('InstanceType')
             timestamp = data.get('Timestamp')
-            if timestamp:
-                timestamp = timestamp.now(timezone.utc)
 
-            spot_prices.append({
-                "instance": instance_type,
-                "price": price,
-                "timestamp": timestamp
-            })
+            if timestamp:
+                    timestamp = timestamp.now(timezone.utc)
+
+            if price:
+                price = float(price)
+
+            if instance_type and price and timestamp:
+                spot_price = Spot_Price(vm_type=instance_type, price=price, timestamp=timestamp)
+                spot_prices.append(spot_price)
 
         return spot_prices
-    
 
 
 if __name__ == "__main__":
@@ -120,10 +170,8 @@ if __name__ == "__main__":
     instance_id = os.getenv('aws_instance_id')
     if instance_id:
         end_time = datetime.now()
-        start_time = end_time
-        response = ec2.describe_spot_price_history(
-            start_time=start_time,
-            end_time=end_time,
-            instance_types=["m4.large"]
+        start_time = end_time - timedelta(days=3)
+        response = ec2.get_spot_price(
+            vm_type="m4.large",
         )
         print(response)
