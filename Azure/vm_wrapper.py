@@ -12,12 +12,9 @@ from shared.types.spot_price import Spot_Price
 
 load_dotenv(override=True)
 
+
 class Azure_VM_Wrapper(Virtual_Machine):
-    def __init__(
-        self, 
-        subscription_id: str, 
-        resource_group_name: str
-    ):
+    def __init__(self, subscription_id: str, resource_group_name: str):
         """
         Initializes the Azure VM Wrapper with the necessary credentials and subscriptions.
         Authenticates to the Azure account and creates a ComputeManageClient that provides
@@ -30,7 +27,7 @@ class Azure_VM_Wrapper(Virtual_Machine):
         self.resource_group_name = resource_group_name
         credential = DefaultAzureCredential()
         self.compute_client = ComputeManagementClient(credential, subscription_id)
-        
+
     def describe_vms(self):
         """
         Lists and describes all of the virtual machines belonging to the subscription
@@ -52,7 +49,9 @@ class Azure_VM_Wrapper(Virtual_Machine):
 
         :param vm_name: the name of the virtual machine to start.
         """
-        start_vm_poller = self.compute_client.virtual_machines.begin_start(self.resource_group_name, vm_name)
+        start_vm_poller = self.compute_client.virtual_machines.begin_start(
+            self.resource_group_name, vm_name
+        )
         start_vm_poller.result()
         print(f"VM {vm_name} started")
 
@@ -62,7 +61,9 @@ class Azure_VM_Wrapper(Virtual_Machine):
 
         :param vm_name: the name of the virtual machine to terminate.
         """
-        stop_vm_poller = self.compute_client.virtual_machines.begin_power_off(self.resource_group_name, vm_name)
+        stop_vm_poller = self.compute_client.virtual_machines.begin_power_off(
+            self.resource_group_name, vm_name
+        )
         stop_vm_poller.result()
         print(f"VM {vm_name} terminated")
 
@@ -74,18 +75,15 @@ class Azure_VM_Wrapper(Virtual_Machine):
         :param commands: the list of commands to exceute on the virtual machine.
         """
 
-        command_input = RunCommandInput(
-            command_id='RunShellScript',
-            script=commands
-        )
+        command_input = RunCommandInput(command_id="RunShellScript", script=commands)
 
-        exec_command_poller = self.compute_client.virtual_machines.begin_run_command( # type: ignore
+        exec_command_poller = self.compute_client.virtual_machines.begin_run_command(  # type: ignore
             resource_group_name=self.resource_group_name,
             vm_name=vm_name,
-            parameters=command_input # type: ignore
+            parameters=command_input,  # type: ignore
         )
 
-        result = exec_command_poller.result() # type: ignore
+        result = exec_command_poller.result()  # type: ignore
 
         if isinstance(result, RunCommandResult) and isinstance(result.value, list):
             for message in result.value:
@@ -115,17 +113,17 @@ class Azure_VM_Wrapper(Virtual_Machine):
             "currency": "USD",
             "timerange": "last30Days",
             "tier": "spot",
-            "payment": "payasyougo"
+            "payment": "payasyougo",
         }
 
         if region:
             params["regions"] = region
 
-        headers ={
+        headers = {
             # Request headers
-            'Cache-Control': 'no-cache',
-            'subscription-key': os.getenv("cloudnet_subscription_primary_key", ""),
-            'allowed-origins': '*',
+            "Cache-Control": "no-cache",
+            "subscription-key": os.getenv("cloudnet_subscription_primary_key", ""),
+            "allowed-origins": "*",
         }
 
         spot_prices: list[Spot_Price] = []
@@ -133,15 +131,17 @@ class Azure_VM_Wrapper(Virtual_Machine):
         response = requests.get(url=url, params=params, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            history_price_values = data.get('listHistoryPriceValues', {})
+            history_price_values = data.get("listHistoryPriceValues", {})
             for data in history_price_values:
-                timestamp = datetime.strptime(data.get('modifiedDate'), '%Y-%m-%d %H:%M:%S')
+                timestamp = datetime.strptime(
+                    data.get("modifiedDate"), "%Y-%m-%d %H:%M:%S"
+                )
                 if timestamp < start_time or timestamp > end_time:
                     # filter out timestamps that do not fit within the bounds.
                     continue
 
-                vm = data.get('name')
-                price = data.get('linuxPrice')
+                vm = data.get("name")
+                price = data.get("linuxPrice")
 
                 if price:
                     price = float(price)
@@ -151,18 +151,14 @@ class Azure_VM_Wrapper(Virtual_Machine):
 
                 if vm and price and timestamp:
                     spot_price = Spot_Price(
-                        vm_type=vm,
-                        price=price,
-                        timestamp=timestamp
+                        vm_type=vm, price=price, timestamp=timestamp
                     )
 
                     spot_prices.append(spot_price)
             return spot_prices
 
-    def get_spot_price(        
-        self,
-        vm_type: str,
-        region: str | None = None
+    def get_spot_price(
+        self, vm_type: str, region: str | None = None
     ) -> Spot_Price | None:
         """
         Fetches the current spot price for a particular Azure instance.
@@ -178,18 +174,13 @@ class Azure_VM_Wrapper(Virtual_Machine):
         start_time = end_time - timedelta(days=30)
 
         spot_prices = self.get_spot_price_history(
-            vm_type=vm_type,
-            start_time=start_time,
-            end_time=end_time,
-            region=region
+            vm_type=vm_type, start_time=start_time, end_time=end_time, region=region
         )
-
-    
 
         if spot_prices:
             # return the  most recent spot price
             return spot_prices[0]
-        
+
         # api_url = "https://prices.azure.com/api/retail/prices"
         # query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
         # if region:
@@ -209,7 +200,6 @@ class Azure_VM_Wrapper(Virtual_Machine):
         #     print("Failed to fetch pricing data:", response.status_code)
         #     print(response.text)
 
-            
 
 if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
@@ -217,7 +207,13 @@ if __name__ == "__main__":
     vm_name = os.getenv("azure_vm_name")
     container_name = os.getenv("azure_container_name")
     storage_name = os.getenv("azure_storage_name")
-    if subscription_id and resource_group_name and vm_name and container_name and storage_name:
+    if (
+        subscription_id
+        and resource_group_name
+        and vm_name
+        and container_name
+        and storage_name
+    ):
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
         end_time = datetime.now()
         start_time = end_time - timedelta(days=30)
@@ -225,9 +221,9 @@ if __name__ == "__main__":
             vm_type="Standard_M416s_6_v3",
             region="eastus",
             start_time=start_time,
-            end_time=end_time
+            end_time=end_time,
         )
-        
+
         print(response)
         # azure.get_azure_spot_prices("F16s Spot", "eastus2")
         # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)

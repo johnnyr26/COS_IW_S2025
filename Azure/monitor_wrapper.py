@@ -7,12 +7,9 @@ from azure.mgmt.monitor import MonitorManagementClient
 
 load_dotenv(override=True)
 
-class Monitor_Wrapper():
-    def __init__(
-        self,
-        subscription_id: str, 
-        resource_group_name: str
-    ):
+
+class Monitor_Wrapper:
+    def __init__(self, subscription_id: str, resource_group_name: str):
         """
         Initializes the Azure Monitor Wrapper with the subscription ID
         and the resouce group name. Authenticates the MonitorManagementClient.
@@ -24,18 +21,11 @@ class Monitor_Wrapper():
         self.subscription_id = subscription_id
         self.resource_group_name = resource_group_name
         credential = DefaultAzureCredential()
-        self.monitor_client = MonitorManagementClient(
-            credential,
-            subscription_id
-        )
-
+        self.monitor_client = MonitorManagementClient(credential, subscription_id)
 
     def get_metrics(
-            self, 
-            vm_name: str, 
-            start_time: datetime, 
-            end_time: datetime
-        ) -> list[dict[str, datetime | float]]:
+        self, vm_name: str, start_time: datetime, end_time: datetime
+    ) -> list[dict[str, datetime | float]]:
         """
         Gets the CPU percentage usage for the virtual machine in the given period.
 
@@ -54,36 +44,38 @@ class Monitor_Wrapper():
             resource_id,
             timespan="{}/{}".format(start_time, end_time),
             interval=timedelta(hours=1),
-            metricnames='Percentage CPU',
-            aggregation='Average'
+            metricnames="Percentage CPU",
+            aggregation="Average",
         )
 
         metrics_data: list[dict[str, datetime | float]] = []
-        
+
         for item in response_data.value:
             # print("{} ({})".format(item.name.localized_value, item.unit))
             for timeserie in item.timeseries:
                 for data in timeserie.data:
-                    metrics_data.append({
-                        "Time": data.time_stamp,
-                        "CPU": data.average,
-                    })
+                    metrics_data.append(
+                        {
+                            "Time": data.time_stamp,
+                            "CPU": data.average,
+                        }
+                    )
                     # print("{}: {}".format(data.time_stamp, data.average))
 
         return metrics_data
 
-    
+
 if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
     resource_group_name = os.getenv("azure_resource_group_name")
     vm_name = os.getenv("azure_vm_name")
     if subscription_id and resource_group_name and vm_name:
         monitor = Monitor_Wrapper(
-            subscription_id=subscription_id, 
-            resource_group_name=resource_group_name
+            subscription_id=subscription_id, resource_group_name=resource_group_name
         )
         end_time = datetime.now(UTC).replace(tzinfo=None)
         start_time = end_time - timedelta(days=3)
-        response = monitor.get_metrics(vm_name=vm_name, start_time=start_time, end_time=end_time)
+        response = monitor.get_metrics(
+            vm_name=vm_name, start_time=start_time, end_time=end_time
+        )
         print(response)
- 

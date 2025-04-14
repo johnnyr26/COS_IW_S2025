@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 import logging
-import boto3 
+import boto3
 from datetime import datetime, timezone, timedelta
 from mypy_boto3_ec2.client import EC2Client
 from mypy_boto3_ec2.literals import InstanceTypeType
@@ -12,6 +12,7 @@ from shared.types.spot_price import Spot_Price
 
 logger = logging.getLogger(__name__)
 load_dotenv(override=True)
+
 
 class EC2_Wrapper(Virtual_Machine):
     def __init__(self, ec2: EC2Client):
@@ -34,7 +35,7 @@ class EC2_Wrapper(Virtual_Machine):
         try:
             self.ec2.start_instances(InstanceIds=[instance_id], DryRun=True)
         except ClientError as e:
-            if 'DryRunOperation' not in str(e):
+            if "DryRunOperation" not in str(e):
                 raise
 
         # Dry run succeeded, run start_instances without dryrun
@@ -55,7 +56,7 @@ class EC2_Wrapper(Virtual_Machine):
         try:
             self.ec2.stop_instances(InstanceIds=[instance_id], DryRun=True)
         except ClientError as e:
-            if 'DryRunOperation' not in str(e):
+            if "DryRunOperation" not in str(e):
                 raise
 
         # Dry run succeeded, call stop_instances without dryrun
@@ -72,11 +73,9 @@ class EC2_Wrapper(Virtual_Machine):
         :param instance_id: The instance id of the EC2 instance to stop.
         """
         return self.ec2.describe_instances()
-    
+
     def get_spot_price(
-        self,
-        vm_type: str | InstanceTypeType,
-        region: str | None = None
+        self, vm_type: str | InstanceTypeType, region: str | None = None
     ) -> Spot_Price | None:
         """
         Describes the current spot price for the particular EC2 instance
@@ -90,33 +89,34 @@ class EC2_Wrapper(Virtual_Machine):
 
         response = self.ec2.describe_spot_price_history(
             EndTime=end_time,
-            InstanceTypes=[vm_type], # type: ignore
+            InstanceTypes=[vm_type],  # type: ignore
             ProductDescriptions=[
-                'Linux/UNIX (Amazon VPC)',
+                "Linux/UNIX (Amazon VPC)",
             ],
-            AvailabilityZone=region if region else '',
+            AvailabilityZone=region if region else "",
             StartTime=start_time,
         )
 
-        spot_price_history = response.get('SpotPriceHistory', {})
+        spot_price_history = response.get("SpotPriceHistory", {})
 
         # just selects the first one since it offers different
         # availability zones within the same region.
-        instance_type = spot_price_history[0].get('InstanceType')
-        price = spot_price_history[0].get('SpotPrice')
-        timestamp = spot_price_history[0].get('Timestamp')
+        instance_type = spot_price_history[0].get("InstanceType")
+        price = spot_price_history[0].get("SpotPrice")
+        timestamp = spot_price_history[0].get("Timestamp")
 
         if timestamp:
-                timestamp = timestamp.now(timezone.utc)
+            timestamp = timestamp.now(timezone.utc)
 
         if price:
             price = float(price)
 
         if instance_type and price and timestamp:
-            spot_price = Spot_Price(vm_type=instance_type, price=price, timestamp=timestamp)
+            spot_price = Spot_Price(
+                vm_type=instance_type, price=price, timestamp=timestamp
+            )
             return spot_price
-        
-    
+
     def get_spot_price_history(
         self,
         vm_type: str | InstanceTypeType,
@@ -135,19 +135,19 @@ class EC2_Wrapper(Virtual_Machine):
         """
         response = self.ec2.describe_spot_price_history(
             EndTime=end_time,
-            InstanceTypes=[vm_type], # type: ignore
+            InstanceTypes=[vm_type],  # type: ignore
             ProductDescriptions=[
-                'Linux/UNIX (Amazon VPC)',
+                "Linux/UNIX (Amazon VPC)",
             ],
-            AvailabilityZone=region if region else '',
+            AvailabilityZone=region if region else "",
             StartTime=start_time,
         )
 
         spot_prices: list[Spot_Price] = []
-        for data in response['SpotPriceHistory']:
-            price = data.get('SpotPrice')
-            instance_type = data.get('InstanceType')
-            timestamp = data.get('Timestamp')
+        for data in response["SpotPriceHistory"]:
+            price = data.get("SpotPrice")
+            instance_type = data.get("InstanceType")
+            timestamp = data.get("Timestamp")
 
             if timestamp:
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
@@ -156,7 +156,9 @@ class EC2_Wrapper(Virtual_Machine):
                 price = float(price)
 
             if instance_type and price and timestamp:
-                spot_price = Spot_Price(vm_type=instance_type, price=price, timestamp=timestamp)
+                spot_price = Spot_Price(
+                    vm_type=instance_type, price=price, timestamp=timestamp
+                )
                 spot_prices.append(spot_price)
 
         return spot_prices
@@ -164,10 +166,10 @@ class EC2_Wrapper(Virtual_Machine):
 
 if __name__ == "__main__":
     ec2 = EC2_Wrapper(
-        ec2=boto3.client('ec2'),
+        ec2=boto3.client("ec2"),
     )
-    
-    instance_id = os.getenv('aws_instance_id')
+
+    instance_id = os.getenv("aws_instance_id")
     if instance_id:
         end_time = datetime.now()
         start_time = end_time - timedelta(days=3)
