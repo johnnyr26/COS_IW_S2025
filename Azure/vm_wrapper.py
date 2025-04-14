@@ -200,6 +200,17 @@ class Azure_VM_Wrapper(Virtual_Machine):
         #     print("Failed to fetch pricing data:", response.status_code)
         #     print(response.text)
 
+    def find_matching_vm_types(self, vcpus: int, memory: int):
+        # List VM sizes in the specified region
+        vm_sizes = self.compute_client.virtual_machine_sizes.list("eastus")
+
+        # Filter for 16 vCPUs and 64 GB RAM
+        matching_vms = [
+            size.as_dict() for size in vm_sizes
+            if size.number_of_cores == vcpus and size.memory_in_mb == memory * 1024
+        ]
+
+        return matching_vms
 
 if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
@@ -215,16 +226,19 @@ if __name__ == "__main__":
         and storage_name
     ):
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=30)
-        response = azure.get_spot_price_history(
-            vm_type="Standard_M416s_6_v3",
-            region="eastus",
-            start_time=start_time,
-            end_time=end_time,
-        )
+        print(azure.find_matching_vm_types(vcpus=192, memory=2048))
 
-        print(response)
+        # end_time = datetime.now()
+        # start_time = end_time - timedelta(days=30)
+        # response = azure.get_spot_price_history(
+        #     vm_type="Standard_M416s_6_v3",
+        #     region="eastus",
+        #     start_time=start_time,
+        #     end_time=end_time,
+        # )
+
+        # print(response)
+        
         # azure.get_azure_spot_prices("F16s Spot", "eastus2")
         # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
         # blob_name = "hello_world.sh"
