@@ -111,7 +111,7 @@ class Azure_VM_Wrapper(Virtual_Machine):
         params = {
             "vmname": vm_type,
             "currency": "USD",
-            "timerange": "last30Days",
+            "timerange": "allAvailableTime",
             "tier": "spot",
             "payment": "payasyougo",
         }
