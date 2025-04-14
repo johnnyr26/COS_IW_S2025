@@ -92,7 +92,8 @@ class EC2_Wrapper(Virtual_Machine):
 
                     if instance_vcpus == vcpus and memory_mib == memory * 1024:
                         instance_type = instance.get("InstanceType")
-                        if instance_type:
+                        supports_spot = 'spot' in instance.get('SupportedUsageClasses', [])
+                        if instance_type and supports_spot:
                             matching_instance_types.append(instance_type)
 
         return matching_instance_types
