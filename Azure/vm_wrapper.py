@@ -1,7 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import RunCommandInput, RunCommandResult
@@ -112,12 +112,14 @@ class Azure_VM_Wrapper(Virtual_Machine):
         url = f"https://data.cloudprice.net/api/v1/price_history_vm"
         params = {
             "vmname": vm_type,
-            "regions": region if region else "",
             "currency": "USD",
             "timerange": "last30Days",
             "tier": "spot",
             "payment": "payasyougo"
         }
+
+        if region:
+            params["regions"] = region
 
         headers ={
             # Request headers
@@ -143,6 +145,9 @@ class Azure_VM_Wrapper(Virtual_Machine):
 
                 if price:
                     price = float(price)
+
+                if timestamp:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
 
                 if vm and price and timestamp:
                     spot_price = Spot_Price(

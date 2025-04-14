@@ -15,3 +15,6 @@ class Spot_Price():
         
     def __repr__(self):
           return f"VM Type: {self.vm_type}, Price: {self.price}, Timestamp: {self.timestamp}"
+    
+    def __lt__(self, other: "Spot_Price") -> bool:
+        return self.price < other.price

@@ -150,7 +150,7 @@ class EC2_Wrapper(Virtual_Machine):
             timestamp = data.get('Timestamp')
 
             if timestamp:
-                    timestamp = timestamp.now(timezone.utc)
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
 
             if price:
                 price = float(price)
