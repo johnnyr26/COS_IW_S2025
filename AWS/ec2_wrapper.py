@@ -66,13 +66,36 @@ class EC2_Wrapper(Virtual_Machine):
         except ClientError as e:
             print(e)
 
-    def describe_instances(self):
+    def find_matching_instance_types(self, vcpus: int, memory: int) -> list[str]:
         """
-        Describes the AWS EC2 instances that exists for the user.
+        Finds all instance types that matches the vCPUS and memory.
 
-        :param instance_id: The instance id of the EC2 instance to stop.
+        :param vcpus: the amount of vCPUs that each instance must match.
+        :param memory: the amount of memory (GiB) that each instance must match
+        :returns: list of all EC2 instance types that matches the vCPUs and memory.
         """
-        return self.ec2.describe_instances()
+
+        # Paginate through all instance types
+        paginator = self.ec2.get_paginator("describe_instance_types")
+        page_iterator = paginator.paginate()
+
+        matching_instance_types: list[str] = []
+
+        for page in page_iterator:
+            for instance in page["InstanceTypes"]:
+                instance_vcpus = instance.get("VCpuInfo", {}).get("DefaultVCpus")
+                if instance_vcpus is None:
+                    continue
+                memory_info = instance.get("MemoryInfo")
+                if memory_info and "SizeInMiB" in memory_info:
+                    memory_mib = memory_info["SizeInMiB"]
+
+                    if instance_vcpus == vcpus and memory_mib == memory * 1024:
+                        instance_type = instance.get("InstanceType")
+                        if instance_type:
+                            matching_instance_types.append(instance_type)
+
+        return matching_instance_types
 
     def get_spot_price(
         self, vm_type: str | InstanceTypeType, region: str | None = None
@@ -169,11 +192,13 @@ if __name__ == "__main__":
         ec2=boto3.client("ec2"),
     )
 
-    instance_id = os.getenv("aws_instance_id")
-    if instance_id:
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=3)
-        response = ec2.get_spot_price(
-            vm_type="m4.large",
-        )
-        print(response)
+    print(ec2.find_matching_instance_types(vcpus=192, memory=2048))
+
+    # instance_id = os.getenv("aws_instance_id")
+    # if instance_id:
+    #     end_time = datetime.now()
+    #     start_time = end_time - timedelta(days=3)
+    #     response = ec2.get_spot_price(
+    #         vm_type="m4.large",
+    #     )
+    #     print(response)
