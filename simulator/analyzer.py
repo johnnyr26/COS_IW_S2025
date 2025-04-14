@@ -1,4 +1,5 @@
 import os
+import csv
 import heapq
 import boto3
 from dotenv import load_dotenv
@@ -37,30 +38,55 @@ class Analzyer:
             heapq.heapify(spot_price_heap)
             switches = 0
 
-            curr_vm: str | None = None
-            curr_aws_price = 0
-            curr_azure_price = 0
+            curr_vm = ""
+            curr_aws_price = float("inf")
+            curr_azure_price = float("inf")
+            curr_price = float("inf")
+            spot_price_log: list[dict[str, datetime | str | float]] = []
 
             while spot_price_heap:
                 _, spot_price = heapq.heappop(spot_price_heap)
 
                 if spot_price.vm_type == aws_instance:
                     curr_aws_price = spot_price.price
-                    if curr_azure_price < curr_aws_price:
-                        if curr_vm != azure_vm:
-                            switches += 1
-                        curr_vm = azure_vm
                 else:
                     curr_azure_price = spot_price.price
-                    if curr_aws_price < curr_azure_price:
-                        if curr_vm != aws_instance:
-                            switches += 1
-                        curr_vm = aws_instance
 
-            print("SWTICHES", switches)
+                if curr_aws_price < curr_azure_price:
+                    selected_vm = aws_instance
+                    selected_price = curr_aws_price
+                else:
+                    selected_vm = azure_vm
+                    selected_price = curr_azure_price
 
-        # print("AWS SPOT PRICING HISTORY", aws_spot_price_history)
-        # print("AZURE SPORT PRICING HISTORY:", azure_spot_price_history)
+                # Count switch if selected VM is different from last
+                if curr_vm != "" and curr_vm != selected_vm:
+                    switches += 1
+
+                curr_vm = selected_vm
+                curr_price = selected_price
+
+                spot_price_log.append(
+                    {
+                        "vm_type": curr_vm,
+                        "timestamp": spot_price.timestamp,
+                        "price": curr_price,
+                    }
+                )
+
+            return spot_price_log
+
+    def create_csv(
+        self,
+        filename: str,
+        spot_price_log: list[dict[str, datetime | str | float]],
+    ):
+        with open(filename, "w", newline="") as csvfile:
+            writer = csv.DictWriter(
+                csvfile, fieldnames=["vm_type", "timestamp", "price"]
+            )
+            writer.writeheader()
+            writer.writerows(spot_price_log)
 
 
 if __name__ == "__main__":
@@ -83,13 +109,16 @@ if __name__ == "__main__":
         analyzer = Analzyer(aws=ec2, azure=azure)
 
         end_time = datetime.now()
-        start_time = end_time - timedelta(days=90)
+        start_time = end_time - timedelta(days=30)
 
-        analyzer.compare_costs(
-            aws_instance="c6i.8xlarge",
+        spot_price_log = analyzer.compare_costs(
+            aws_instance="m6i.2xlarge",
             azure_vm="Standard_D32pls_v5",
             start_time=start_time,
             end_time=end_time,
         )
+
+        if spot_price_log:
+            analyzer.create_csv("standard.csv", spot_price_log=spot_price_log)
 
         # analyzer.compare_costs(aws_instance="m6i.2xlarge", azure_vm="Standard_D8s_v5", start_time=start_time, end_time=end_time)
