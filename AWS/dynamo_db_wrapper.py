@@ -2,7 +2,7 @@ import boto3
 from mypy_boto3_dynamodb.client import DynamoDBClient
 from botocore.exceptions import ClientError
 
-class DynamoDBWrapper:
+class DynamoDB_Wrapper:
     def __init__(self, dynamo_db: DynamoDBClient, table_name: str, partition_key: str):
         """
         Initializes the DynamoDB instance.
@@ -34,7 +34,17 @@ class DynamoDBWrapper:
             return response
         except ClientError as ex:
             raise ex
+        
+    def get_item_count(self) -> int:
+        """
+        Gets the number of items in the table.
+        Note, the value updates every 6 hours. 
+
+        :returns: Number of items in the table.
+        """
+        return self.dynamo_db.describe_table(TableName=self.table_name).get('Table', {}).get('ItemCount', 0)
 
 if __name__ == "__main__":
-    dynamo_db = DynamoDBWrapper(boto3.client('dynamodb'), 'COS_IW_TABLE', 'website_id')
-    print(dynamo_db.put_item(id="2", item="This is a second example."))
+    dynamo_db = DynamoDB_Wrapper(boto3.client('dynamodb'), 'COS_IW_TABLE', 'website_id')
+    # print(dynamo_db.put_item(id="1", item="Item 1"))
+    print(dynamo_db.get_item_count())
