@@ -39,7 +39,7 @@ class DynamoDB_Wrapper:
             if response["ResponseMetadata"].get("HTTPStatusCode") != 200:
                 raise Exception(f"Failed to upload item for ID {id}")
 
-            prev_id = self.get_highest_id()
+            prev_id = self.get_latest_id()
             if prev_id < int(item['id']):
                 # this makes it easier to keep track of the latest item
                 self.dynamo_db.put_item(
@@ -58,7 +58,7 @@ class DynamoDB_Wrapper:
             print(ex)
             raise ex
 
-    def get_highest_id(self) -> int:
+    def get_latest_id(self) -> int:
         try:
             response = self.get_item(key="latest_id")
             if response:

@@ -1,3 +1,4 @@
+import sys
 import requests
 from bs4 import BeautifulSoup
 
@@ -34,5 +35,7 @@ class Web_Scraper:
             raise ex
 
 if __name__ == "__main__":
+    id = sys.argv[1]
     web_scraper = Web_Scraper()
-    print(web_scraper.scrape_wikipedia_article("https://en.wikipedia.org/?curid=59"))
+    response = web_scraper.scrape_wikipedia_article(f"https://en.wikipedia.org/?curid={id}")
+    print(response)

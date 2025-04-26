@@ -2,13 +2,14 @@ import os
 from dotenv import load_dotenv
 import logging
 import boto3
-from datetime import datetime, timezone, timedelta
-from mypy_boto3_ec2.client import EC2Client
+from datetime import datetime, timezone
 from mypy_boto3_ec2.literals import InstanceTypeType
 from botocore.exceptions import ClientError
+from AWS.ssm_wrapper import SSM_Wrapper
 
 from shared.virtual_machine import Virtual_Machine
 from shared.types.spot_price import Spot_Price
+
 
 logger = logging.getLogger(__name__)
 load_dotenv(override=True)
@@ -35,6 +36,7 @@ class EC2_Wrapper(Virtual_Machine):
         """
         # Do a dryrun first to verify permissions
         try:
+            print("STARTING INSTANCE")
             self.ec2.start_instances(InstanceIds=[instance_id], DryRun=True)
         except ClientError as e:
             if "DryRunOperation" not in str(e):
@@ -43,7 +45,6 @@ class EC2_Wrapper(Virtual_Machine):
         # Dry run succeeded, run start_instances without dryrun
         try:
             response = self.ec2.start_instances(InstanceIds=[instance_id], DryRun=False)
-            print(response)
         except ClientError as e:
             print(e)
 
@@ -54,6 +55,7 @@ class EC2_Wrapper(Virtual_Machine):
 
         :param instance_id: The instance id of the EC2 instance to stop.
         """
+        print("Stopping instance")
         # Do a dryrun first to verify permissions
         try:
             self.ec2.stop_instances(InstanceIds=[instance_id], DryRun=True)
@@ -64,9 +66,13 @@ class EC2_Wrapper(Virtual_Machine):
         # Dry run succeeded, call stop_instances without dryrun
         try:
             response = self.ec2.stop_instances(InstanceIds=[instance_id], DryRun=False)
-            print(response)
+            # print(response)
         except ClientError as e:
             print(e)
+
+    def get_instance_state(self, instance_id: str) -> str:
+        response = self.ec2.describe_instances(InstanceIds=[instance_id])
+        return response["Reservations"][0]["Instances"][0]["State"]["Name"]
 
     def find_matching_instance_types(self, vcpus: int, memory: int) -> list[str]:
         """
@@ -125,17 +131,15 @@ class EC2_Wrapper(Virtual_Machine):
 
         if vm_name:
             instances = self.ec2.describe_instances(
-                Filters=[
-                    {'Name': 'tag:Name', 'Values': [vm_name]}
-                ]
+                Filters=[{"Name": "tag:Name", "Values": [vm_name]}]
             )
 
             # Get the instance type and AZ
-            reservations = instances.get('Reservations', [])
-            if not reservations or 'Instances' not in reservations[0]:
+            reservations = instances.get("Reservations", [])
+            if not reservations or "Instances" not in reservations[0]:
                 raise ValueError("No instances found in the response.")
-            instance_info = reservations[0]['Instances'][0]
-            instance_type = instance_info.get('InstanceType')
+            instance_info = reservations[0]["Instances"][0]
+            instance_type = instance_info.get("InstanceType")
             response = self.ec2.describe_spot_price_history(
                 EndTime=end_time,
                 InstanceTypes=[instance_type],  # type: ignore
@@ -222,16 +226,24 @@ class EC2_Wrapper(Virtual_Machine):
 
         return spot_prices
 
+    def execute_commands(self, commands: list[str]):
+        ssm = SSM_Wrapper()
+        return ssm.execute_commands(
+            instance_id=os.getenv("aws_instance_id", ""), commands=commands
+        )
+
 
 if __name__ == "__main__":
     ec2 = EC2_Wrapper()
-    print(ec2.find_matching_instance_types(vcpus=192, memory=2048))
 
-    # instance_id = os.getenv("aws_instance_id")
-    # if instance_id:
-    #     end_time = datetime.now()
-    #     start_time = end_time - timedelta(days=3)
-    #     response = ec2.get_spot_price(
-    #         vm_type="m4.large",
-    #     )
-    #     print(response)
+    # print(ec2.find_matching_instance_types(vcpus=192, memory=2048))
+
+    instance_id = os.getenv("aws_instance_id")
+    if instance_id:
+        print(ec2.get_instance_state(instance_id=instance_id))
+    # end_time = datetime.now()
+    # start_time = end_time - timedelta(days=3)
+    # response = ec2.get_spot_price(
+    #     vm_type="m4.large",
+    # )
+    # print(response)

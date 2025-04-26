@@ -128,7 +128,7 @@ if __name__ == "__main__":
         )
         storage.delete_blob(container_name=container_name, blob_name=blob_name)
         storage.upload_file(
-            filepath="Azure/hello_world.sh",
+            filepath="analzyer/web_scraper.py",
             container_name=container_name,
             blob_name=blob_name,
         )

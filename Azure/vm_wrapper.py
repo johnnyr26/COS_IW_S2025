@@ -1,4 +1,7 @@
 import os
+import re
+import json
+import paramiko
 import requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
@@ -6,7 +9,7 @@ from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import RunCommandInput, RunCommandResult
 
-# from storage_wrapper import Storage_Wrapper
+from Azure.storage_wrapper import Storage_Wrapper
 from shared.virtual_machine import Virtual_Machine
 from shared.types.spot_price import Spot_Price
 
@@ -69,28 +72,70 @@ class Azure_VM_Wrapper(Virtual_Machine):
         stop_vm_poller.result()
         print(f"VM {vm_name} terminated")
 
-    def execute_commands(self, vm_name: str, commands: list[str]):
-        """
-        Executes a command on the virtual machine.
-
-        :param vm_name: the name of the virtual machine to execute the command.
-        :param commands: the list of commands to exceute on the virtual machine.
-        """
-
-        command_input = RunCommandInput(command_id="RunShellScript", script=commands)
-
-        exec_command_poller = self.compute_client.virtual_machines.begin_run_command(  # type: ignore
-            resource_group_name=self.resource_group_name,
-            vm_name=vm_name,
-            parameters=command_input,  # type: ignore
+    def get_vm_state(self, vm_name: str):
+        instance_view = self.compute_client.virtual_machines.instance_view(
+            resource_group_name=self.resource_group_name, 
+            vm_name=vm_name
         )
+        statuses = instance_view.statuses
 
-        result = exec_command_poller.result()  # type: ignore
+        for status in statuses:
+            if status.code.startswith("PowerState/"):
+                return status.display_status
 
-        if isinstance(result, RunCommandResult) and isinstance(result.value, list):
-            for message in result.value:
-                print(message.code)
-                print(message.message)
+    def execute_commands(self, commands: list[str]):
+        host = "9.169.218.248"
+        username = "azureuser"
+        key_file_path = "Azure/Azure_key-2.pem"
+
+        key = paramiko.RSAKey.from_private_key_file(key_file_path)
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # Connect using your SSH key
+        ssh.connect(hostname=host, username=username, pkey=key)
+
+        # Execute the command
+        _, stdout, stderr = ssh.exec_command(commands[0])
+
+        # Read output
+        output = stdout.read().decode()
+        _ = stderr.read().decode()
+
+        ssh.close()
+
+        return output
+
+    # def execute_commands(self, commands: list[str]):
+    #     """
+    #     Executes a command on the virtual machine.
+
+    #     :param vm_name: the name of the virtual machine to execute the command.
+    #     :param commands: the list of commands to exceute on the virtual machine.
+    #     """
+
+    #     print("Executing Azure Command")
+
+    #     command_input = RunCommandInput(command_id="RunShellScript", script=commands)
+
+    #     exec_command_poller = self.compute_client.virtual_machines.begin_run_command(  # type: ignore
+    #         resource_group_name=self.resource_group_name,
+    #         vm_name=os.getenv("azure_vm_name", "Azure"),
+    #         parameters=command_input,  # type: ignore
+    #     )
+
+    #     result = exec_command_poller.result()  # type: ignore
+
+    #     if isinstance(result, RunCommandResult) and isinstance(result.value, list):
+    #         for message in result.value:
+    #             if message.message:
+    #                 match = re.search(
+    #                     r"\[stdout\]\n(.*?)\n\[stderr\]", message.message, re.DOTALL
+    #                 )
+    #                 if match:
+    #                     json_str = match.group(1).strip()
+    #                     return json_str
 
     def get_spot_price_history(
         self,
@@ -187,15 +232,17 @@ class Azure_VM_Wrapper(Virtual_Machine):
         query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
         if region:
             query += f" and armRegionName eq '{region}'"
-        response = requests.get(api_url, params={'$filter': query})
+        response = requests.get(api_url, params={"$filter": query})
 
         if response.status_code == 200:
             data = response.json()
-            items = data.get('Items', {})
+            items = data.get("Items", {})
 
             if items:
                 for item in items:
-                    print(f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}")
+                    print(
+                        f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}"
+                    )
             else:
                 print("No spot pricing data found for the specified instance.")
         else:
@@ -232,25 +279,27 @@ if __name__ == "__main__":
         and storage_name
     ):
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
+        print(azure.get_vm_state(vm_name=vm_name))
         # print(azure.find_matching_vm_types(vcpus=192, memory=2048))
 
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=30)
-        response = azure.get_spot_price(
-            vm_type="Standard_D2_v4",
-            region="eastus",
-        )
+        # end_time = datetime.now()
+        # start_time = end_time - timedelta(days=30)
+        # response = azure.get_spot_price(
+        #     vm_type="Standard_D2_v4",
+        #     region="eastus",
+        # )
 
-        print(response)
+        # print(response)
 
         # azure.get_azure_spot_prices("F16s Spot", "eastus2")
         # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
-        # blob_name = "hello_world.sh"
-        # blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
+        # blob_name = "web_scraper.py"
+        # # blob_url = storage_wrapper.get_blob_url(container_name, blob_name)
         # commands = [
-        #     f"curl -o /home/azureuser/{blob_name} '{blob_url}'",
-        #     f"chmod +x /home/azureuser/{blob_name}",
-        #     f"/home/azureuser/{blob_name}"
+        #     # f"curl -o /home/azureuser/{blob_name} '{blob_url}'",
+        #     # f"chmod +x /home/azureuser/{blob_name}",
+        #     # f"pip3 install bs4",
+            
         # ]
-        # azure.execute_commands(vm_name, commands)
-        # azure.stop_vm(vm_name)
+        # print(azure.execute_commands(["python3 /home/azureuser/web_scraper.py 19"]))
+        # # azure.stop_vm(vm_name)
