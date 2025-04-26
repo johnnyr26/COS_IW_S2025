@@ -26,12 +26,12 @@ class Web_Scraper:
             response = requests.get(url, timeout=10)
             soup = BeautifulSoup(response.text, 'html.parser')
             paragraphs = [p.get_text() for p in soup.find_all('p')]
-            if paragraphs[0] == "The requested page title is empty or contains only a namespace prefix.\n":
+            if len(paragraphs) < 2 or paragraphs[0] == "The requested page title is empty or contains only a namespace prefix.\n":
                 raise WebsiteNotFoundException(f"Wikipedia article url {url} is not found.")
             # the first element of a valid article is always \n.
-            return {"url": url, "text": paragraphs[1]}
+            return {"url": url, "content": paragraphs[1]}
         except WebsiteNotFoundException as ex:
-            return {"url": url, "error": ex.message}
+            raise ex
 
 if __name__ == "__main__":
     web_scraper = Web_Scraper()

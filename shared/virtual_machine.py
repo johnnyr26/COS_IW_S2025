@@ -18,6 +18,7 @@ class Virtual_Machine(ABC):
     def get_spot_price(
         self,
         vm_type: str | InstanceTypeType,
+        vm_name: str | None,
         region: str | None,
     ) -> Spot_Price | None:
         pass

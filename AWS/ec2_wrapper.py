@@ -13,16 +13,18 @@ from shared.types.spot_price import Spot_Price
 logger = logging.getLogger(__name__)
 load_dotenv(override=True)
 
+MiB_MULTIPLIER = 1024
+
 
 class EC2_Wrapper(Virtual_Machine):
-    def __init__(self, ec2: EC2Client):
+    def __init__(self):
         """
         Initializes the EC2 instance.
 
         :param ec2: A Boto3 EC2 client. This client provides low-level
                     access to AWS EC2 services.
         """
-        self.ec2 = ec2
+        self.ec2 = boto3.client("ec2")
 
     def start_instance(self, instance_id: str):
         """
@@ -90,16 +92,24 @@ class EC2_Wrapper(Virtual_Machine):
                 if memory_info and "SizeInMiB" in memory_info:
                     memory_mib = memory_info["SizeInMiB"]
 
-                    if instance_vcpus == vcpus and memory_mib == memory * 1024:
+                    if (
+                        instance_vcpus == vcpus
+                        and memory_mib == memory * MiB_MULTIPLIER
+                    ):
                         instance_type = instance.get("InstanceType")
-                        supports_spot = 'spot' in instance.get('SupportedUsageClasses', [])
+                        supports_spot = "spot" in instance.get(
+                            "SupportedUsageClasses", []
+                        )
                         if instance_type and supports_spot:
                             matching_instance_types.append(instance_type)
 
         return matching_instance_types
 
     def get_spot_price(
-        self, vm_type: str | InstanceTypeType, region: str | None = None
+        self,
+        vm_type: str | InstanceTypeType | None = None,
+        vm_name: str | None = None,
+        region: str | None = None,
     ) -> Spot_Price | None:
         """
         Describes the current spot price for the particular EC2 instance
@@ -111,15 +121,40 @@ class EC2_Wrapper(Virtual_Machine):
 
         start_time = end_time = datetime.now()
 
-        response = self.ec2.describe_spot_price_history(
-            EndTime=end_time,
-            InstanceTypes=[vm_type],  # type: ignore
-            ProductDescriptions=[
-                "Linux/UNIX (Amazon VPC)",
-            ],
-            AvailabilityZone=region if region else "",
-            StartTime=start_time,
-        )
+        response = None
+
+        if vm_name:
+            instances = self.ec2.describe_instances(
+                Filters=[
+                    {'Name': 'tag:Name', 'Values': [vm_name]}
+                ]
+            )
+
+            # Get the instance type and AZ
+            reservations = instances.get('Reservations', [])
+            if not reservations or 'Instances' not in reservations[0]:
+                raise ValueError("No instances found in the response.")
+            instance_info = reservations[0]['Instances'][0]
+            instance_type = instance_info.get('InstanceType')
+            response = self.ec2.describe_spot_price_history(
+                EndTime=end_time,
+                InstanceTypes=[instance_type],  # type: ignore
+                ProductDescriptions=[
+                    "Linux/UNIX (Amazon VPC)",
+                ],
+                AvailabilityZone=region if region else "",
+                StartTime=start_time,
+            )
+        else:
+            response = self.ec2.describe_spot_price_history(
+                EndTime=end_time,
+                InstanceTypes=[vm_type],  # type: ignore
+                ProductDescriptions=[
+                    "Linux/UNIX (Amazon VPC)",
+                ],
+                AvailabilityZone=region if region else "",
+                StartTime=start_time,
+            )
 
         spot_price_history = response.get("SpotPriceHistory", {})
 
@@ -189,10 +224,7 @@ class EC2_Wrapper(Virtual_Machine):
 
 
 if __name__ == "__main__":
-    ec2 = EC2_Wrapper(
-        ec2=boto3.client("ec2"),
-    )
-
+    ec2 = EC2_Wrapper()
     print(ec2.find_matching_instance_types(vcpus=192, memory=2048))
 
     # instance_id = os.getenv("aws_instance_id")

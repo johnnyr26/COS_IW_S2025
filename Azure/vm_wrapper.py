@@ -12,6 +12,8 @@ from shared.types.spot_price import Spot_Price
 
 load_dotenv(override=True)
 
+MiB_MULTIPLIER = 1024
+
 
 class Azure_VM_Wrapper(Virtual_Machine):
     def __init__(self, subscription_id: str, resource_group_name: str):
@@ -170,35 +172,35 @@ class Azure_VM_Wrapper(Virtual_Machine):
         :returns: the most recently posted Spot Price.
         """
 
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=30)
+        # end_time = datetime.now()
+        # start_time = end_time - timedelta(days=30)
 
-        spot_prices = self.get_spot_price_history(
-            vm_type=vm_type, start_time=start_time, end_time=end_time, region=region
-        )
+        # spot_prices = self.get_spot_price_history(
+        #     vm_type=vm_type, start_time=start_time, end_time=end_time, region=region
+        # )
 
-        if spot_prices:
-            # return the  most recent spot price
-            return spot_prices[0]
+        # if spot_prices:
+        #     # return the  most recent spot price
+        #     return spot_prices[0]
 
-        # api_url = "https://prices.azure.com/api/retail/prices"
-        # query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
-        # if region:
-        #     query += f" and armRegionName eq '{region}'"
-        # response = requests.get(api_url, params={'$filter': query})
+        api_url = "https://prices.azure.com/api/retail/prices"
+        query = f"contains(meterName, 'Spot') and skuName eq '{vm_type}'"
+        if region:
+            query += f" and armRegionName eq '{region}'"
+        response = requests.get(api_url, params={'$filter': query})
 
-        # if response.status_code == 200:
-        #     data = response.json()
-        #     items = data.get('Items', {})
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get('Items', {})
 
-        #     if items:
-        #         for item in items:
-        #             print(f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}")
-        #     else:
-        #         print("No spot pricing data found for the specified instance.")
-        # else:
-        #     print("Failed to fetch pricing data:", response.status_code)
-        #     print(response.text)
+            if items:
+                for item in items:
+                    print(f"{item['productName']}: ${item['retailPrice']} per hour in location {item['location']}")
+            else:
+                print("No spot pricing data found for the specified instance.")
+        else:
+            print("Failed to fetch pricing data:", response.status_code)
+            print(response.text)
 
     def find_matching_vm_types(self, vcpus: int, memory: int):
         # List VM sizes in the specified region
@@ -206,11 +208,15 @@ class Azure_VM_Wrapper(Virtual_Machine):
 
         # Filter for 16 vCPUs and 64 GB RAM
         matching_vms = [
-            size.as_dict() for size in vm_sizes
-            if size.number_of_cores == vcpus and size.memory_in_mb == memory * 1024
+            size.name
+            for size in vm_sizes
+            if size.number_of_cores == vcpus
+            and size.memory_in_mb == memory * MiB_MULTIPLIER
+            and size.name
         ]
 
         return matching_vms
+
 
 if __name__ == "__main__":
     subscription_id = os.getenv("azure_subscription_id")
@@ -226,19 +232,17 @@ if __name__ == "__main__":
         and storage_name
     ):
         azure = Azure_VM_Wrapper(subscription_id, resource_group_name)
-        print(azure.find_matching_vm_types(vcpus=192, memory=2048))
+        # print(azure.find_matching_vm_types(vcpus=192, memory=2048))
 
-        # end_time = datetime.now()
-        # start_time = end_time - timedelta(days=30)
-        # response = azure.get_spot_price_history(
-        #     vm_type="Standard_M416s_6_v3",
-        #     region="eastus",
-        #     start_time=start_time,
-        #     end_time=end_time,
-        # )
+        end_time = datetime.now()
+        start_time = end_time - timedelta(days=30)
+        response = azure.get_spot_price(
+            vm_type="Standard_D2_v4",
+            region="eastus",
+        )
 
-        # print(response)
-        
+        print(response)
+
         # azure.get_azure_spot_prices("F16s Spot", "eastus2")
         # storage_wrapper = Storage_Wrapper(storage_name, subscription_id, resource_group_name)
         # blob_name = "hello_world.sh"

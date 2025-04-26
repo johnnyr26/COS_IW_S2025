@@ -1,22 +1,23 @@
 import boto3
-from mypy_boto3_ce import CostExplorerClient
+from datetime import datetime, timedelta
 
 
 class Cost_Explorer_Wrapper:
-    def __init__(self, ce: CostExplorerClient):
+    def __init__(self):
         """
         Initializes the CostExplorer wrapper.
 
         :param ce: A Boto3 CE client. This client provides low-level
                     access to AWS CE services.
         """
-        self.ce = ce
+        self.ce = boto3.client("ce")
 
-    def get_cost_and_usage(
+    def get_cost(
         self,
-        start_date: str,
-        end_date: str,
-    ) -> dict[str, list[dict[str, float | dict[str, str]]] | float]:
+        instance_name: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> float:
         """
         Fetches the cost and hourly usage of the EC2 instance.
         Granularity is set daily.
@@ -27,49 +28,36 @@ class Cost_Explorer_Wrapper:
         :return: A dictionary with the total cost, total hourly usage, and cost/usasge by day
         """
         response = self.ce.get_cost_and_usage(
-            TimePeriod={"Start": start_date, "End": end_date},
-            Granularity="DAILY",
-            Metrics=["UnblendedCost", "UsageQuantity"],
+            TimePeriod={
+                "Start": start_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "End": end_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+            Granularity="HOURLY",
+            Metrics=["UnblendedCost"],
+            Filter={
+                "Tags": {"Key": "NAME", "Values": [instance_name]},
+            },
+            GroupBy=[{"Type": "DIMENSION", "Key": "USAGE_TYPE"}],
         )
-        cost: list[dict[str, float | dict[str, str]]] = []
-        usage_quantity: list[dict[str, float | dict[str, str]]] = []
+
+        print(response)
 
         total_cost = 0
-        total_hours = 0
-        for data in response["ResultsByTime"]:
-            total_data = data.get("Total", {})
-            unblended_cost = total_data.get("UnblendedCost", {}).get("Amount")
-            if unblended_cost is not None:
-                total_cost += float(unblended_cost)
-                cost.append(
-                    {
-                        "time_period": {
-                            k: str(v) for k, v in data.get("TimePeriod", {}).items()
-                        },
-                        "cost": float(unblended_cost),
-                    }
-                )
 
-            usage_quantity_data = total_data.get("UsageQuantity", {}).get("Amount")
-            if usage_quantity_data is not None:
-                total_hours += float(usage_quantity_data)
-                usage_quantity.append(
-                    {
-                        "time_period": {
-                            k: str(v) for k, v in data.get("TimePeriod", {}).items()
-                        },
-                        "usage": float(usage_quantity_data),
-                    }
-                )
+        for group in response["ResultsByTime"][0]["Groups"]:
+            usage_type = group["Keys"][0]
+            cost = group["Metrics"]["UnblendedCost"]["Amount"]
+            total_cost += float(cost)
 
-        return {
-            "cost_by_day": cost,
-            "hours_by_day": usage_quantity,
-            "total_cost": total_cost,
-            "total_hours": total_hours,
-        }
+        return total_cost
 
 
 if __name__ == "__main__":
-    ce = Cost_Explorer_Wrapper(boto3.client("ce"))
-    print(ce.get_cost_and_usage(start_date="2025-04-01", end_date="2025-04-07"))
+    ce = Cost_Explorer_Wrapper()
+    print(
+        ce.get_cost(
+            start_time=datetime.now() - timedelta(days=30),
+            end_time=datetime.now(),
+            instance_name="COS IW Free Tier",
+        )
+    )
