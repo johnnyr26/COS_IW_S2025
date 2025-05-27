@@ -121,7 +121,7 @@ class Analyzer:
 
             # updates every 5 minutes, continues processing until termination.
             curr_time = datetime.now()
-            if curr_time - timedelta(minutes=1) >= prev_log_time:
+            if curr_time - timedelta(minutes=5) >= prev_log_time:
                 self.log_data(
                     start_time=prev_log_time,
                     end_time=curr_time,
@@ -165,6 +165,6 @@ if __name__ == "__main__":
             aws_instance=instance_id,
             azure_vm=azure_vm_name,
             start_time=datetime.now(),
-            end_time=datetime.now() + timedelta(minutes=5),
+            end_time=datetime.now() + timedelta(hours=6),
             prev_id=analyzer.get_last_id(),
         )
